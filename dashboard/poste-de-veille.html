@@ -1,0 +1,669 @@
+<title>Poste de veille</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout : bandeau de veille (alertes) en tête, onglets par module, grille de cartes "instrument" pour la liste suivie */
+:root{
+  --bg:#EDF0EE; --surface:#F8FAF9; --ink:#15201E; --muted:#5B6966; --line:#D3DAD7;
+  --accent:#1F6670; --accent-soft:#D7E7E8;
+  --up:#1E7A4C; --down:#B23A2E; --opp:#A86A00; --opp-soft:#F6E7C8; --alert-soft:#F5D9D5;
+  --f-display:"Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+  --f-body:"Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-data:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1615; --surface:#15201F; --ink:#E4ECEA; --muted:#93A4A0; --line:#28403D;
+  --accent:#5FB3BC; --accent-soft:#1B3436; --up:#4CC48A; --down:#F07B6E; --opp:#E8B04A; --opp-soft:#3A2E14; --alert-soft:#3D1F1B; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1615; --surface:#15201F; --ink:#E4ECEA; --muted:#93A4A0; --line:#28403D;
+  --accent:#5FB3BC; --accent-soft:#1B3436; --up:#4CC48A; --down:#F07B6E; --opp:#E8B04A; --opp-soft:#3A2E14; --alert-soft:#3D1F1B; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px;display:grid;gap:20px}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:clamp(1.6rem,4vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h2{font-size:1.25rem;font-weight:700}
+h3{font-size:1.02rem;font-weight:700}
+.num{font-family:var(--f-data);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.label{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+
+header.top{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:end;justify-content:space-between}
+.top .meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:.85rem}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:.8rem;white-space:nowrap}
+.chip.alert{background:var(--alert-soft);border-color:transparent;color:var(--down)}
+.chip.opp{background:var(--opp-soft);border-color:transparent;color:var(--opp)}
+.chip.ok{color:var(--up)}
+.dot{width:8px;height:8px;border-radius:50%;background:currentColor;flex:none}
+
+nav.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line);padding-block:6px 0;scrollbar-width:none}
+nav.tabs a{padding:8px 14px;text-decoration:none;color:var(--muted);font-weight:600;border-bottom:2px solid transparent;white-space:nowrap;font-size:.92rem}
+nav.tabs a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--accent)}
+nav.tabs .count{font-family:var(--f-data);font-size:.75rem;margin-left:4px;color:var(--muted)}
+
+.view{display:grid;gap:20px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:20px;align-items:start}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:12px;min-width:0}
+.panel-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+
+/* flux d'alertes */
+.feed{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.feed li{display:grid;grid-template-columns:4px 1fr;gap:10px;align-items:stretch}
+.feed .stripe{border-radius:2px;background:var(--muted)}
+.feed li.alert .stripe{background:var(--down)}
+.feed li.opp .stripe{background:var(--opp)}
+.feed li.info .stripe{background:var(--accent)}
+.feed .what{font-weight:600}
+.feed .why{font-size:.86rem;color:var(--muted)}
+.empty{color:var(--muted);font-size:.9rem;padding:8px 0}
+
+/* indices */
+.indices{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px}
+.idx{display:grid;gap:2px}
+.idx .v{font-size:1.35rem}
+
+/* cartes valeurs */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:10px;min-width:0}
+.card.is-alert{border-color:var(--down)}
+.card.is-opp{border-color:var(--opp)}
+.card-head{display:flex;justify-content:space-between;gap:8px;align-items:start}
+.card-head .sym{font-family:var(--f-data);font-weight:500;font-size:.85rem;color:var(--muted)}
+.card-head .name{font-weight:600;line-height:1.25}
+.price{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.price .v{font-size:1.5rem;font-family:var(--f-data)}
+.up{color:var(--up)} .down{color:var(--down)}
+.perf{display:flex;gap:6px;flex-wrap:wrap}
+.perf span{font-family:var(--f-data);font-size:.75rem;padding:2px 7px;border-radius:5px;background:var(--bg)}
+svg.spark{width:100%;height:auto;display:block}
+.sliders{display:grid;gap:8px;border-top:1px dashed var(--line);padding-top:10px}
+.sl{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;font-size:.84rem}
+.sl input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--accent)}
+.sl output{font-family:var(--f-data);font-size:.82rem}
+.btn{font:inherit;font-size:.85rem;font-weight:600;padding:7px 12px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted);padding:4px 6px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.add{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.add input{font:inherit;padding:7px 10px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--ink);width:min(100%,180px);font-family:var(--f-data);text-transform:uppercase}
+.pending{font-size:.8rem;color:var(--muted);font-style:italic}
+
+/* réglages opportunités */
+.opps{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:14px}
+.toggle{display:flex;gap:8px;align-items:center;font-size:.88rem}
+.toggle input{accent-color:var(--accent);width:16px;height:16px}
+
+/* listes actu / congrès / agenda */
+.list{list-style:none;margin:0;padding:0;display:grid}
+.list li{padding:10px 0;border-bottom:1px solid var(--line);display:grid;gap:3px;min-width:0}
+.list li:last-child{border-bottom:none}
+.list .row1{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.tk{font-family:var(--f-data);font-size:.75rem;padding:1px 6px;border-radius:4px;background:var(--accent-soft);color:var(--accent)}
+.tk.held{background:var(--opp-soft);color:var(--opp)}
+.tag{font-size:.72rem;padding:1px 6px;border-radius:4px;border:1px solid var(--line);color:var(--muted)}
+.title-link{font-weight:600;color:var(--ink);text-decoration:none}
+.title-link:hover{text-decoration:underline}
+.summary{font-size:.86rem;color:var(--muted);overflow-wrap:anywhere}
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.filters button{font:inherit;font-size:.8rem;padding:3px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer}
+.filters button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.85rem}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+tr.held td{background:var(--opp-soft)}
+.buy{color:var(--up);font-weight:600} .sell{color:var(--down);font-weight:600}
+.agenda-day{font-family:var(--f-data);font-size:.8rem;color:var(--muted);min-width:7.5em}
+.agenda li{grid-template-columns:auto 1fr;gap:12px;align-items:baseline}
+.note{font-size:.82rem;color:var(--muted);border-left:3px solid var(--line);padding-left:10px}
+.banner{padding:10px 14px;border-radius:8px;background:var(--accent-soft);font-size:.88rem}
+footer{font-size:.78rem;color:var(--muted);display:grid;gap:4px}
+@media (prefers-reduced-motion:no-preference){.card,.panel{transition:border-color .2s}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="label">Yann · veille personnelle</div>
+      <h1>Poste de veille</h1>
+    </div>
+    <div class="meta" id="meta">
+      <span class="chip" id="refresh-chip">Chargement des données…</span>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs" aria-label="Modules"></nav>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <!-- Aperçu -->
+  <section class="view" id="view-apercu">
+    <div class="panel">
+      <div class="panel-head"><h2>Signaux du jour</h2><span class="label" id="feed-count"></span></div>
+      <ul class="feed" id="feed-all"><li class="empty">Les signaux apparaîtront ici dès que les cours seront chargés.</li></ul>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Marchés</h2><span class="label">indices de référence</span></div>
+      <div class="indices" id="indices"></div>
+    </div>
+    <div class="grid2">
+      <div class="panel">
+        <div class="panel-head"><h2>Agenda</h2><a href="#agenda">Tout voir</a></div>
+        <ul class="list agenda" id="agenda-mini"><li class="empty">Lecture de Google Agenda…</li></ul>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Actualité de ma liste</h2><a href="#actu">Tout voir</a></div>
+        <ul class="list" id="news-mini"><li class="empty">Aucune actualité chargée.</li></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Finance -->
+  <section class="view" id="view-finance" hidden>
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Ma liste suivie</h2>
+        <form class="add" id="add-form" autocomplete="off">
+          <label class="label" for="add-sym">Ajouter</label>
+          <input id="add-sym" name="sym" placeholder="ex. SGO.PA" maxlength="12" pattern="[A-Za-z0-9.\-^]{1,12}" aria-describedby="add-help">
+          <button class="btn primary" type="submit" id="add-btn">Suivre</button>
+        </form>
+      </div>
+      <p class="note" id="add-help">Symbole Yahoo Finance : AAPL pour Apple, SGO.PA pour Saint-Gobain (Paris), ^FCHI pour le CAC 40. Le cours arrive à la prochaine mise à jour.</p>
+    </div>
+    <div class="cards" id="cards"></div>
+    <div class="panel">
+      <div class="panel-head"><h2>Détecteur d'opportunités</h2><span class="label">s'applique à toute la liste</span></div>
+      <div class="opps">
+        <div class="sl">
+          <label for="opp-drop">Repli depuis le plus haut sur 52 semaines</label><output id="opp-drop-out" for="opp-drop"></output>
+          <input type="range" id="opp-drop" min="5" max="50" step="1">
+        </div>
+        <label class="toggle"><input type="checkbox" id="opp-cross"> Signaler quand la moyenne 20 jours repasse au-dessus de la moyenne 50 jours</label>
+        <label class="toggle"><input type="checkbox" id="opp-congress"> Signaler les achats déclarés par des élus du Congrès sur ma liste</label>
+        <label class="toggle"><input type="checkbox" id="opp-earnings"> Signaler les publications de résultats sur ma liste</label>
+      </div>
+      <ul class="feed" id="feed-opp"></ul>
+    </div>
+  </section>
+
+  <!-- Actu -->
+  <section class="view" id="view-actu" hidden>
+    <div class="panel">
+      <div class="panel-head"><h2>Actualité</h2><div class="filters" id="news-filters"></div></div>
+      <p class="note">Les titres sont des pistes, pas des faits : ouvre l'article avant d'agir.</p>
+      <ul class="list" id="news-list"></ul>
+    </div>
+  </section>
+
+  <!-- Congrès -->
+  <section class="view" id="view-congres" hidden>
+    <div class="panel">
+      <div class="panel-head"><h2>Déclarations d'élus américains</h2><span class="label">House Clerk · STOCK Act</span></div>
+      <p class="note">Déclarations publiques, faites jusqu'à 45 jours après la transaction. Les montants sont des fourchettes. Les lignes surlignées concernent ta liste.</p>
+      <div id="congress"></div>
+    </div>
+  </section>
+
+  <!-- Agenda -->
+  <section class="view" id="view-agenda" hidden>
+    <div class="panel">
+      <div class="panel-head"><h2>Les 7 prochains jours</h2><span class="label" id="agenda-status">Google Agenda</span></div>
+      <ul class="list agenda" id="agenda-list"><li class="empty">Lecture de Google Agenda…</li></ul>
+    </div>
+  </section>
+
+  <footer>
+    <span>Cours différés (Yahoo Finance), actualités Yahoo et dépôts 8-K de la SEC, déclarations du House Clerk. Ce n'est pas un conseil en investissement.</span>
+    <span id="footer-src"></span>
+  </footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- modules : ajouter une entrée ici pour un nouvel onglet ---------- */
+var MODULES = [
+  {id:"apercu",  label:"Aperçu"},
+  {id:"finance", label:"Finance"},
+  {id:"actu",    label:"Actu"},
+  {id:"congres", label:"Congrès"},
+  {id:"agenda",  label:"Agenda"}
+];
+
+var state = {
+  markets:{}, news:[], congress:[], meta:null,
+  config:null, configVersion:0, loaded:false,
+  events:null, agendaError:null, newsFilter:"all", canWrite:true
+};
+var db = null;
+var DEFAULT_CONFIG = {watchlist:[], indices:[], thresholds:{}, opp:{dropFromHigh:15, maCross:true, congress:true, earnings:true}};
+
+/* ---------- utilitaires ---------- */
+function el(tag, attrs, kids){
+  var n = document.createElement(tag);
+  if (attrs) for (var k in attrs){
+    if (k === "text") n.textContent = attrs[k];
+    else if (k === "cls") n.className = attrs[k];
+    else n.setAttribute(k, attrs[k]);
+  }
+  (kids||[]).forEach(function(c){ if (c!=null) n.appendChild(typeof c === "string" ? document.createTextNode(c) : c); });
+  return n;
+}
+function clear(n){ while(n.firstChild) n.removeChild(n.firstChild); }
+function docId(sym){ return sym.replace(/\^/g,"idx-"); }
+function safeHref(u){ return (typeof u === "string" && /^https:\/\//i.test(u)) ? u : null; }
+var nf = {};
+function fmt(v, cur){
+  if (v==null || isNaN(v)) return "—";
+  var key = cur||"";
+  if (!nf[key]) nf[key] = new Intl.NumberFormat("fr-FR", cur ? {style:"currency",currency:cur,maximumFractionDigits: 2} : {maximumFractionDigits:2});
+  return nf[key].format(v);
+}
+function pct(v){ if (v==null||isNaN(v)) return "—"; return (v>0?"+":"") + v.toFixed(1).replace(".",",") + " %"; }
+function signCls(v){ return v>0 ? "up" : v<0 ? "down" : ""; }
+function ma(closes, n){ if (closes.length < n) return null; var s=0; for (var i=closes.length-n;i<closes.length;i++) s+=closes[i]; return s/n; }
+function maSeries(closes, n){ var out=[], s=0; for (var i=0;i<closes.length;i++){ s+=closes[i]; if(i>=n) s-=closes[i-n]; out.push(i>=n-1 ? s/n : null); } return out; }
+function relTime(iso){
+  var t = Date.parse(iso); if (isNaN(t)) return "";
+  var d = (Date.now()-t)/3600000;
+  if (d < 1) return "il y a " + Math.max(1,Math.round(d*60)) + " min";
+  if (d < 24) return "il y a " + Math.round(d) + " h";
+  return new Date(t).toLocaleDateString("fr-FR",{day:"numeric",month:"short"});
+}
+function dateFr(iso){ var t=Date.parse(iso); return isNaN(t)?"":new Date(t).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"}); }
+function cfg(){ return state.config || DEFAULT_CONFIG; }
+function watched(){ return cfg().watchlist || []; }
+function isWatched(t){ return !!t && watched().indexOf(String(t).toUpperCase()) >= 0; }
+
+/* ---------- calculs par valeur ---------- */
+function stats(m){
+  var h = (m.history||[]).map(function(p){return p[1];});
+  var price = m.price!=null ? m.price : h[h.length-1];
+  var prev = h.length>1 ? h[h.length-2] : m.prev;
+  function back(n){ return h.length>n ? (price/h[h.length-1-n]-1)*100 : null; }
+  var ma20 = ma(h,20), ma50 = ma(h,50);
+  var s20 = maSeries(h,20), s50 = maSeries(h,50);
+  var crossUp = false;
+  for (var i=Math.max(1,h.length-5); i<h.length; i++){
+    if (s20[i-1]!=null && s50[i-1]!=null && s20[i]!=null && s50[i]!=null && s20[i-1] <= s50[i-1] && s20[i] > s50[i]) crossUp = true;
+  }
+  var hi = Math.max.apply(null, h.concat([m.high52||-Infinity]));
+  return {
+    price:price, day: prev ? (price/prev-1)*100 : null,
+    p1m:back(21), p3m:back(63), p6m: h.length>1 ? (price/h[0]-1)*100 : null,
+    ma20:ma20, ma50:ma50, trend: (ma20&&ma50) ? (ma20>ma50?"haussière":"baissière") : null,
+    crossUp:crossUp, high:hi, fromHigh: hi>0 ? (price/hi-1)*100 : null, closes:h
+  };
+}
+
+/* ---------- moteur de signaux ---------- */
+function computeSignals(){
+  var out = [], c = cfg(), opp = c.opp || DEFAULT_CONFIG.opp;
+  watched().forEach(function(sym){
+    var m = state.markets[sym]; if (!m) return;
+    var s = stats(m), th = (c.thresholds||{})[sym] || {};
+    var cur = m.currency;
+    if (th.below!=null && s.price <= th.below) out.push({sev:"alert", sym:sym, what: sym + " sous ton seuil de " + fmt(th.below,cur), why:"Dernier cours " + fmt(s.price,cur) + "."});
+    if (th.above!=null && s.price >= th.above) out.push({sev:"alert", sym:sym, what: sym + " au-dessus de ton seuil de " + fmt(th.above,cur), why:"Dernier cours " + fmt(s.price,cur) + "."});
+    if (th.move!=null && s.day!=null && Math.abs(s.day) >= th.move) out.push({sev:"alert", sym:sym, what: sym + " bouge de " + pct(s.day) + " sur la séance", why:"Ton seuil de mouvement est de " + th.move.toString().replace(".",",") + " %."});
+    if (s.fromHigh!=null && -s.fromHigh >= opp.dropFromHigh) out.push({sev:"opp", sym:sym, what: sym + " à " + pct(s.fromHigh) + " de son plus haut", why:"Plus haut retenu " + fmt(s.high,cur) + ". Repli à surveiller : décote ou tendance de fond, à vérifier."});
+    if (opp.maCross && s.crossUp) out.push({sev:"opp", sym:sym, what: sym + " : la moyenne 20 jours repasse au-dessus de la 50 jours", why:"Croisement sur les 5 dernières séances, signe d'un retournement haussier possible."});
+  });
+  if (opp.congress){
+    state.congress.forEach(function(f){
+      (f.rows||[]).forEach(function(r){
+        if (r.ticker && isWatched(r.ticker) && /purchase|achat/i.test(r.type_name||"")) out.push({sev:"opp", sym:r.ticker, what: f.name + " a déclaré un achat de " + r.ticker, why:(r.amount||"") + ", transaction du " + dateFr(r.date) + ", déclarée le " + dateFr(f.filed) + "."});
+      });
+    });
+  }
+  if (opp.earnings){
+    state.news.forEach(function(n){
+      var t = (n.touches||[]).filter(isWatched);
+      if (t.length && (n.tags||[]).indexOf("earnings")>=0 && n.kind === "8-K") out.push({sev:"info", sym:t[0], what: t[0] + " : dépôt 8-K lié aux résultats", why:n.title});
+    });
+  }
+  var rank = {alert:0, opp:1, info:2};
+  out.sort(function(a,b){ return rank[a.sev]-rank[b.sev]; });
+  return out;
+}
+
+/* ---------- rendu ---------- */
+function renderTabs(signals){
+  var nav = document.getElementById("tabs"); clear(nav);
+  var cur = currentView();
+  var counts = {finance: signals.filter(function(s){return s.sev!=="info";}).length, actu: state.news.length, congres: state.congress.length};
+  MODULES.forEach(function(m){
+    var a = el("a",{href:"#"+m.id, text:m.label});
+    if (counts[m.id]) a.appendChild(el("span",{cls:"count", text:String(counts[m.id])}));
+    if (m.id === cur) a.setAttribute("aria-current","page");
+    nav.appendChild(a);
+  });
+}
+function renderMeta(signals){
+  var box = document.getElementById("meta"); clear(box);
+  var nA = signals.filter(function(s){return s.sev==="alert";}).length;
+  var nO = signals.filter(function(s){return s.sev==="opp";}).length;
+  if (!state.loaded){ box.appendChild(el("span",{cls:"chip", id:"refresh-chip", text:"Chargement des données…"})); return; }
+  box.appendChild(el("span",{cls:"chip " + (nA?"alert":"ok")},[el("span",{cls:"dot"}), nA + (nA>1?" alertes":" alerte")]));
+  box.appendChild(el("span",{cls:"chip " + (nO?"opp":"")},[el("span",{cls:"dot"}), nO + (nO>1?" opportunités":" opportunité")]));
+  if (state.meta && state.meta.updatedAt) box.appendChild(el("span",{cls:"chip", title: state.meta.updatedAt, text:"Données du " + new Date(state.meta.updatedAt).toLocaleString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}));
+}
+function feedItem(s){
+  return el("li",{cls:s.sev},[el("span",{cls:"stripe","aria-hidden":"true"}), el("div",{},[
+    el("div",{cls:"what", text:s.what}),
+    el("div",{cls:"why", text:(s.sev==="alert"?"Alerte · ":s.sev==="opp"?"Opportunité · ":"Info · ") + s.why})
+  ])]);
+}
+function renderFeed(id, list, emptyText){
+  var ul = document.getElementById(id); clear(ul);
+  if (!list.length){ ul.appendChild(el("li",{cls:"empty", text:emptyText})); return; }
+  list.forEach(function(s){ ul.appendChild(feedItem(s)); });
+}
+function renderIndices(){
+  var box = document.getElementById("indices"); clear(box);
+  var idx = cfg().indices || [];
+  if (!idx.length){ box.appendChild(el("p",{cls:"empty", text:"Aucun indice suivi."})); return; }
+  idx.forEach(function(sym){
+    var m = state.markets[sym];
+    if (!m){ box.appendChild(el("div",{cls:"idx"},[el("span",{cls:"label",text:sym}), el("span",{cls:"pending",text:"en attente de la prochaine mise à jour"})])); return; }
+    var s = stats(m);
+    box.appendChild(el("div",{cls:"idx"},[
+      el("span",{cls:"label", text:m.name}),
+      el("span",{cls:"v num", text:fmt(s.price)}),
+      el("span",{cls:"num " + signCls(s.day), text:pct(s.day) + " séance · " + pct(s.p1m) + " 1 mois"}),
+      spark(s, null, m.currency, 240, 48)
+    ]));
+  });
+}
+
+/* sparkline SVG à l'échelle, avec moyenne 50 jours et seuils */
+function spark(s, th, cur, W, H){
+  var NS = "http://www.w3.org/2000/svg";
+  W = W||320; H = H||90;
+  var pad = {l:2, r:46, t:6, b:6};
+  var svg = document.createElementNS(NS,"svg");
+  svg.setAttribute("viewBox","0 0 "+W+" "+H); svg.setAttribute("class","spark"); svg.setAttribute("role","img");
+  var c = s.closes; if (c.length < 2){ return svg; }
+  var vals = c.slice();
+  if (th){ if (th.below!=null) vals.push(th.below); if (th.above!=null) vals.push(th.above); }
+  var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+  if (hi === lo){ hi += 1; lo -= 1; }
+  var x = function(i){ return pad.l + i*(W-pad.l-pad.r)/(c.length-1); };
+  var y = function(v){ return pad.t + (hi-v)*(H-pad.t-pad.b)/(hi-lo); };
+  function mk(tag, a){ var n=document.createElementNS(NS,tag); for (var k in a) n.setAttribute(k,a[k]); return n; }
+  svg.setAttribute("aria-label", "Cours sur " + c.length + " séances, de " + fmt(c[0],cur) + " à " + fmt(c[c.length-1],cur));
+  [0.25,0.5,0.75].forEach(function(f){ var yy = pad.t + f*(H-pad.t-pad.b); svg.appendChild(mk("line",{x1:pad.l,x2:W-pad.r,y1:yy,y2:yy,stroke:"var(--line)","stroke-width":"0.6"})); });
+  var up = c[c.length-1] >= c[0];
+  var col = up ? "var(--up)" : "var(--down)";
+  var d = c.map(function(v,i){ return (i?"L":"M") + x(i).toFixed(1) + " " + y(v).toFixed(1); }).join(" ");
+  svg.appendChild(mk("path",{d: d + " L" + x(c.length-1).toFixed(1) + " " + (H-pad.b) + " L" + x(0).toFixed(1) + " " + (H-pad.b) + " Z", fill:col, "fill-opacity":"0.10", stroke:"none"}));
+  var m50 = maSeries(c,50), md = "", started = false;
+  m50.forEach(function(v,i){ if (v==null) return; md += (started?"L":"M") + x(i).toFixed(1) + " " + y(v).toFixed(1) + " "; started = true; });
+  if (md) svg.appendChild(mk("path",{d:md, fill:"none", stroke:"var(--muted)", "stroke-width":"1", "stroke-dasharray":"3 2"}));
+  svg.appendChild(mk("path",{d:d, fill:"none", stroke:col, "stroke-width":"1.6", "stroke-linejoin":"round"}));
+  function thLine(v, label){
+    var yy = y(v);
+    svg.appendChild(mk("line",{x1:pad.l,x2:W-pad.r,y1:yy,y2:yy,stroke:"var(--accent)","stroke-width":"1","stroke-dasharray":"5 3"}));
+    var t = mk("text",{x:W-pad.r+4,y:yy+3.5,"font-size":"9.5",fill:"var(--accent)","font-family":"IBM Plex Mono, monospace"}); t.textContent = label; svg.appendChild(t);
+  }
+  if (th && th.above!=null) thLine(th.above, "▲ " + Math.round(th.above));
+  if (th && th.below!=null) thLine(th.below, "▼ " + Math.round(th.below));
+  var ex = x(c.length-1), ey = y(c[c.length-1]);
+  svg.appendChild(mk("circle",{cx:ex, cy:ey, r:"3", fill:col}));
+  if (!th){ var lt = mk("text",{x:ex+6,y:ey+3.5,"font-size":"10",fill:"var(--ink)","font-family":"IBM Plex Mono, monospace"}); lt.textContent = Math.round(c[c.length-1]); svg.appendChild(lt); }
+  return svg;
+}
+
+function sliderRow(id, label, min, max, step, value, fmtFn, onInput){
+  var out = el("output",{for:id, text:fmtFn(value)});
+  var inp = el("input",{type:"range", id:id, min:String(min), max:String(max), step:String(step), value:String(value)});
+  if (!state.canWrite) inp.disabled = true;
+  inp.addEventListener("input", function(){ out.textContent = fmtFn(parseFloat(inp.value)); onInput(parseFloat(inp.value), false); });
+  inp.addEventListener("change", function(){ onInput(parseFloat(inp.value), true); });
+  return el("div",{cls:"sl"},[el("label",{for:id, text:label}), out, inp]);
+}
+
+function renderCards(signals){
+  var box = document.getElementById("cards"); clear(box);
+  var list = watched();
+  if (!list.length){ box.appendChild(el("p",{cls:"empty", text:"Ta liste est vide. Ajoute un symbole ci-dessus pour commencer."})); return; }
+  list.forEach(function(sym){
+    var m = state.markets[sym];
+    var th = Object.assign({}, (cfg().thresholds||{})[sym] || {});
+    var mine = signals.filter(function(s){ return s.sym === sym; });
+    var card = el("article",{cls:"card" + (mine.some(function(s){return s.sev==="alert";}) ? " is-alert" : mine.some(function(s){return s.sev==="opp";}) ? " is-opp" : "")});
+    var rm = el("button",{cls:"btn ghost", type:"button", "aria-label":"Retirer " + sym + " de la liste", text:"Retirer"});
+    if (!state.canWrite) rm.disabled = true;
+    rm.addEventListener("click", function(){ removeSym(sym); });
+    card.appendChild(el("div",{cls:"card-head"},[el("div",{},[el("div",{cls:"sym", text:sym}), el("div",{cls:"name", text: m ? m.name : "En attente"})]), rm]));
+    if (!m){ card.appendChild(el("p",{cls:"pending", text:"Ajouté à la liste. Le cours et l'historique arriveront à la prochaine mise à jour des données."})); box.appendChild(card); return; }
+    var s = stats(m), cur = m.currency;
+    card.appendChild(el("div",{cls:"price"},[el("span",{cls:"v", text:fmt(s.price,cur)}), el("span",{cls:"num " + signCls(s.day), text:pct(s.day)}), el("span",{cls:"muted", text: s.trend ? "tendance " + s.trend : ""})]));
+    card.appendChild(el("div",{cls:"perf"},[el("span",{cls:signCls(s.p1m), text:"1 m " + pct(s.p1m)}), el("span",{cls:signCls(s.p3m), text:"3 m " + pct(s.p3m)}), el("span",{cls:signCls(s.p6m), text:"6 m " + pct(s.p6m)}), el("span",{cls:"down", text:"du plus haut " + pct(s.fromHigh)})]));
+    var sv = spark(s, th, cur); card.appendChild(sv);
+    mine.forEach(function(sg){ card.appendChild(el("div",{cls:"why " + (sg.sev==="alert"?"down":sg.sev==="opp"?"":"muted"), style: sg.sev==="opp" ? "color:var(--opp)" : "", text: sg.what})); });
+
+    var lo = Math.min.apply(null, s.closes.concat([m.low52||Infinity])), hi = Math.max.apply(null, s.closes.concat([m.high52||-Infinity]));
+    var minR = Math.floor(lo*0.85), maxR = Math.ceil(hi*1.15), step = s.price > 1000 ? 10 : s.price > 100 ? 1 : 0.5;
+    var sid = docId(sym).replace(/[^A-Za-z0-9_-]/g,"_");
+    var sl = el("div",{cls:"sliders"});
+    sl.appendChild(sliderRow("below-"+sid, "M'alerter si le cours passe sous", minR, maxR, step, th.below!=null?th.below:Math.round(s.price*0.93), function(v){return fmt(v,cur);}, function(v,commit){ th.below=v; redrawSpark(); if(commit) saveThreshold(sym,{below:v}); }));
+    sl.appendChild(sliderRow("above-"+sid, "M'alerter si le cours dépasse", minR, maxR, step, th.above!=null?th.above:Math.round(s.price*1.07), function(v){return fmt(v,cur);}, function(v,commit){ th.above=v; redrawSpark(); if(commit) saveThreshold(sym,{above:v}); }));
+    sl.appendChild(sliderRow("move-"+sid, "M'alerter si la séance bouge de plus de", 0.5, 10, 0.5, th.move!=null?th.move:3, function(v){return "± " + v.toString().replace(".",",") + " %";}, function(v,commit){ th.move=v; if(commit) saveThreshold(sym,{move:v}); }));
+    card.appendChild(sl);
+    function redrawSpark(){ var n = spark(s, th, cur); card.replaceChild(n, sv); sv = n; }
+    box.appendChild(card);
+  });
+}
+
+function renderOppSettings(signals){
+  var o = cfg().opp || DEFAULT_CONFIG.opp;
+  var r = document.getElementById("opp-drop"), out = document.getElementById("opp-drop-out");
+  if (document.activeElement !== r){ r.value = String(o.dropFromHigh); }
+  out.textContent = "≥ " + r.value + " %";
+  document.getElementById("opp-cross").checked = !!o.maCross;
+  document.getElementById("opp-congress").checked = !!o.congress;
+  document.getElementById("opp-earnings").checked = !!o.earnings;
+  ["opp-drop","opp-cross","opp-congress","opp-earnings"].forEach(function(id){ document.getElementById(id).disabled = !state.canWrite; });
+  renderFeed("feed-opp", signals.filter(function(s){return s.sev==="opp";}), "Aucune opportunité avec ces réglages.");
+}
+
+function newsItem(n){
+  var href = safeHref(n.link);
+  var title = href ? el("a",{cls:"title-link", href:href, target:"_blank", rel:"noopener noreferrer", text:n.title}) : el("span",{cls:"title-link", text:n.title});
+  var row = el("div",{cls:"row1"});
+  (n.touches && n.touches.length ? n.touches : [n.ticker]).forEach(function(t){ if (t) row.appendChild(el("span",{cls:"tk" + (isWatched(t)?" held":""), text:t})); });
+  row.appendChild(el("span",{cls:"muted", style:"font-size:.8rem", text:(n.kind==="8-K"?"SEC 8-K":n.source||"") + " · " + relTime(n.time)}));
+  (n.tags||[]).forEach(function(t){ row.appendChild(el("span",{cls:"tag", text:t})); });
+  var li = el("li",{},[row, title]);
+  if (n.summary) li.appendChild(el("div",{cls:"summary", text:n.summary}));
+  return li;
+}
+function renderNews(){
+  var mini = document.getElementById("news-mini"); clear(mini);
+  var relevant = state.news.filter(function(n){ return (n.touches||[]).some(isWatched) || isWatched(n.ticker); });
+  (relevant.length ? relevant : state.news).slice(0,4).forEach(function(n){ mini.appendChild(newsItem(n)); });
+  if (!state.news.length) mini.appendChild(el("li",{cls:"empty", text:"Aucune actualité chargée."}));
+
+  var f = document.getElementById("news-filters"); clear(f);
+  var tickers = {}; state.news.forEach(function(n){ (n.touches&&n.touches.length?n.touches:[n.ticker]).forEach(function(t){ if(t) tickers[t]=1; }); });
+  ["all"].concat(Object.keys(tickers).sort()).forEach(function(t){
+    var b = el("button",{type:"button", "aria-pressed": String(state.newsFilter===t), text: t==="all" ? "Tout" : t});
+    b.addEventListener("click", function(){ state.newsFilter = t; renderNews(); });
+    f.appendChild(b);
+  });
+  var ul = document.getElementById("news-list"); clear(ul);
+  var shown = state.news.filter(function(n){ return state.newsFilter==="all" || (n.touches||[]).indexOf(state.newsFilter)>=0 || n.ticker===state.newsFilter; });
+  if (!shown.length) ul.appendChild(el("li",{cls:"empty", text:"Rien pour ce filtre."}));
+  shown.forEach(function(n){ ul.appendChild(newsItem(n)); });
+}
+
+function renderCongress(){
+  var box = document.getElementById("congress"); clear(box);
+  if (!state.congress.length){ box.appendChild(el("p",{cls:"empty", text:"Aucune déclaration chargée."})); return; }
+  var wrap = el("div",{cls:"tablewrap"}), t = el("table");
+  t.appendChild(el("thead",{},[el("tr",{},["Déclaré le","Élu","Titre","Opération","Date","Montant","Détenteur"].map(function(h){return el("th",{text:h});}))]));
+  var tb = el("tbody");
+  state.congress.forEach(function(f){
+    (f.rows||[]).forEach(function(r){
+      var href = safeHref(f.url);
+      var who = href ? el("a",{href:href, target:"_blank", rel:"noopener noreferrer", text:f.name + " (" + (f.district||"") + ")"}) : el("span",{text:f.name});
+      var buy = /purchase/i.test(r.type_name||"");
+      var op = buy ? "Achat" : /sale/i.test(r.type_name||"") ? (/partial/i.test(r.type_name)?"Vente partielle":"Vente") : (r.type_name||"");
+      tb.appendChild(el("tr",{cls: r.ticker && isWatched(r.ticker) ? "held" : ""},[
+        el("td",{cls:"num", text:dateFr(f.filed)}), el("td",{},[who]),
+        el("td",{},[r.ticker ? el("span",{cls:"tk" + (isWatched(r.ticker)?" held":""), text:r.ticker}) : null, " ", el("span",{cls:"muted", text:(r.asset||"").slice(0,48)})]),
+        el("td",{cls: buy?"buy":"sell", text:op}), el("td",{cls:"num", text:dateFr(r.date)}), el("td",{cls:"num", text:r.amount||""}), el("td",{text:({self:"lui-même",spouse:"conjoint",joint:"commun",dependent:"enfant"})[r.owner_name]||r.owner_name||""})
+      ]));
+    });
+  });
+  t.appendChild(tb); wrap.appendChild(t); box.appendChild(wrap);
+}
+
+function renderAgenda(){
+  var lists = [document.getElementById("agenda-list"), document.getElementById("agenda-mini")];
+  var status = document.getElementById("agenda-status");
+  lists.forEach(function(ul, k){
+    clear(ul);
+    if (state.agendaError){ ul.appendChild(el("li",{cls:"empty", text:state.agendaError})); return; }
+    if (state.events === null){ ul.appendChild(el("li",{cls:"empty", text:"Lecture de Google Agenda…"})); return; }
+    var evs = k ? state.events.slice(0,3) : state.events;
+    if (!evs.length){ ul.appendChild(el("li",{cls:"empty", text:"Rien de prévu sur les 7 prochains jours."})); return; }
+    evs.forEach(function(e){
+      var href = safeHref(e.link);
+      var title = href ? el("a",{cls:"title-link", href:href, target:"_blank", rel:"noopener noreferrer", text:e.title}) : el("span",{cls:"title-link", text:e.title});
+      ul.appendChild(el("li",{},[el("span",{cls:"agenda-day", text:e.when}), el("div",{},[title, e.where ? el("div",{cls:"summary", text:e.where}) : null])]));
+    });
+  });
+  if (status) status.textContent = state.agendaStamp ? "Google Agenda · lu " + relTime(state.agendaStamp) : "Google Agenda";
+}
+
+function renderAll(){
+  var signals = state.loaded ? computeSignals() : [];
+  renderTabs(signals); renderMeta(signals);
+  document.getElementById("feed-count").textContent = state.loaded ? signals.length + " signal" + (signals.length>1?"s":"") : "";
+  renderFeed("feed-all", signals, state.loaded ? "Rien à signaler : aucun seuil franchi, aucune opportunité détectée." : "Les signaux apparaîtront ici dès que les cours seront chargés.");
+  renderIndices(); renderCards(signals); renderOppSettings(signals); renderNews(); renderCongress(); renderAgenda();
+  var src = document.getElementById("footer-src");
+  if (state.meta && state.meta.sources) src.textContent = "Sources de la dernière mise à jour : " + state.meta.sources.join(", ") + ".";
+}
+
+/* ---------- navigation ---------- */
+function currentView(){ var h = (location.hash||"").slice(1); return MODULES.some(function(m){return m.id===h;}) ? h : "apercu"; }
+function showView(){
+  var v = currentView();
+  MODULES.forEach(function(m){ var s = document.getElementById("view-"+m.id); if (s) s.hidden = (m.id !== v); });
+  renderTabs(state.loaded ? computeSignals() : []);
+}
+window.addEventListener("hashchange", showView);
+
+/* ---------- écritures (une à la fois) ---------- */
+var writing = Promise.resolve();
+function writeConfig(mutator){
+  var next = JSON.parse(JSON.stringify(cfg()));
+  mutator(next);
+  state.config = next; renderAll();
+  if (!db){ showBanner("Réglage appliqué pour cette visite seulement : la base n'est pas joignable."); return; }
+  writing = writing.then(function(){ return db.doc("config/watchlist").set(next); }).catch(function(e){
+    if (e && e.code === "invalid_argument"){ state.canWrite = false; showBanner("Tu peux consulter ce tableau mais pas modifier ses réglages."); renderAll(); }
+    else if (e && e.code === "quota_exceeded") showBanner("La base est pleine : le réglage n'a pas été enregistré.");
+    else showBanner("Le réglage n'a pas pu être enregistré. Réessaie dans un instant.");
+  });
+}
+function saveThreshold(sym, patch){ writeConfig(function(c){ c.thresholds = c.thresholds||{}; c.thresholds[sym] = Object.assign({}, c.thresholds[sym]||{}, patch); }); }
+function removeSym(sym){ writeConfig(function(c){ c.watchlist = (c.watchlist||[]).filter(function(s){return s!==sym;}); }); }
+function showBanner(t){ var b = document.getElementById("banner"); b.textContent = t; b.hidden = false; }
+
+document.getElementById("add-form").addEventListener("submit", function(ev){
+  ev.preventDefault();
+  var inp = document.getElementById("add-sym");
+  var sym = (inp.value||"").trim().toUpperCase();
+  if (!/^[A-Z0-9.\-^]{1,12}$/.test(sym)){ inp.setCustomValidity("Symbole invalide : lettres, chiffres, point, tiret ou ^ (12 caractères max)."); inp.reportValidity(); return; }
+  inp.setCustomValidity("");
+  if (watched().indexOf(sym) >= 0){ inp.value = ""; return; }
+  writeConfig(function(c){ c.watchlist = (c.watchlist||[]).concat([sym]); });
+  inp.value = "";
+});
+document.getElementById("add-sym").addEventListener("input", function(){ this.setCustomValidity(""); });
+var dropEl = document.getElementById("opp-drop");
+dropEl.addEventListener("input", function(){ document.getElementById("opp-drop-out").textContent = "≥ " + dropEl.value + " %"; });
+dropEl.addEventListener("change", function(){ var v = parseFloat(dropEl.value); writeConfig(function(c){ c.opp = Object.assign({}, DEFAULT_CONFIG.opp, c.opp, {dropFromHigh:v}); }); });
+[["opp-cross","maCross"],["opp-congress","congress"],["opp-earnings","earnings"]].forEach(function(p){
+  document.getElementById(p[0]).addEventListener("change", function(e){ var v = e.target.checked; writeConfig(function(c){ var o = Object.assign({}, DEFAULT_CONFIG.opp, c.opp); o[p[1]] = v; c.opp = o; }); });
+});
+
+/* ---------- données : base de l'artifact ---------- */
+function startDb(){
+  if (!window.claude || !window.claude.use){ noData("Ouvre ce tableau dans Claude pour charger les données."); return; }
+  window.claude.use("db").then(function(d){
+    if (!d){ noData("La base de données n'est pas disponible dans cette vue."); return; }
+    db = d;
+    var timer = setTimeout(function(){ if (!state.loaded) noData("Les données ne répondent pas encore. Elles s'afficheront dès que la base répondra."); }, 10000);
+    var got = {};
+    function ready(k){ got[k] = true; if (got.m && got.c){ state.loaded = true; clearTimeout(timer); document.getElementById("banner").hidden = true; } renderAll(); }
+    db.collection("markets").onSnapshot(function(snap){
+      var m = {}; snap.docs.forEach(function(doc){ var v = doc.data(); if (v && v.sym) m[v.sym] = v; });
+      state.markets = m; if (!snap.metadata.fromCache) ready("m"); else renderAll();
+    }, dbErr);
+    db.doc("config/watchlist").onSnapshot(function(doc){
+      if (doc.exists) state.config = doc.data(); else state.config = null;
+      if (!doc.metadata.fromCache) ready("c"); else renderAll();
+    }, dbErr);
+    db.doc("feeds/news").onSnapshot(function(doc){ state.news = doc.exists ? (doc.data().items||[]) : []; renderAll(); }, dbErr);
+    db.doc("feeds/congress").onSnapshot(function(doc){ state.congress = doc.exists ? (doc.data().filings||[]) : []; renderAll(); }, dbErr);
+    db.doc("feeds/meta").onSnapshot(function(doc){ state.meta = doc.exists ? doc.data() : null; renderAll(); }, dbErr);
+  });
+  window.claude.use("user").then(function(u){
+    if (!u) return;
+    Promise.resolve(u.can ? u.can("data.write") : null).then(function(w){ if (w === false){ state.canWrite = false; renderAll(); } });
+  });
+}
+function dbErr(e){
+  if (e && e.code === "revoked") noData("L'accès à ce tableau a changé.");
+  else if (e && e.code === "resource_exhausted") noData("Trop de requêtes : recharge la page dans un moment.");
+  else noData("Les données n'ont pas pu être lues.");
+}
+function noData(msg){ showBanner(msg); renderAll(); }
+
+/* ---------- agenda : connecteur Google Agenda ---------- */
+function parseEvents(payload){
+  var arr = Array.isArray(payload) ? payload : (payload && (payload.events || payload.items)) || [];
+  return arr.map(function(e){
+    var st = (e.start && (e.start.dateTime || e.start.date)) || e.startTime || e.start || "";
+    var allDay = !!(e.start && e.start.date && !e.start.dateTime);
+    var t = Date.parse(st);
+    var when = isNaN(t) ? "" : new Date(t).toLocaleDateString("fr-FR",{weekday:"short", day:"numeric", month:"short"}) + (allDay ? "" : " · " + new Date(t).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}));
+    return {title: e.summary || e.title || "(sans titre)", when: when, where: e.location || "", link: e.htmlLink || e.link || "", t: t};
+  }).sort(function(a,b){ return (a.t||0)-(b.t||0); });
+}
+function startAgenda(){
+  if (!window.claude || !window.claude.use){ state.agendaError = "Agenda disponible quand le tableau est ouvert dans Claude."; renderAgenda(); return; }
+  window.claude.use("mcp").then(function(mcp){
+    if (!mcp){ state.agendaError = "L'agenda n'est pas disponible dans cette vue."; renderAgenda(); return; }
+    mcp.watchTool("Google Calendar", "list_events", {pageSize:10, orderBy:"startTime"}, function(ev){
+      if (ev.type === "data"){
+        state.agendaError = null; state.events = parseEvents(ev.result.payload);
+        state.agendaStamp = ev.result.cache ? new Date(ev.result.cache.storedAt).toISOString() : new Date().toISOString();
+      } else {
+        var c = ev.error && ev.error.code;
+        if (c === "needs_reauth"){ state.events = null; state.agendaError = "Reconnecte Google Agenda dans claude.ai, Paramètres, Connecteurs."; }
+        else if (c === "server_not_connected" || c === "selection_required"){ state.events = null; state.agendaError = "Ajoute Google Agenda dans claude.ai, Paramètres, Connecteurs."; }
+        else if (c === "not_in_manifest" || c === "approval_required" || c === "blocked_by_policy" || c === "not_granted" || c === "capability_disabled"){ state.events = null; state.agendaError = "L'accès à l'agenda n'est pas autorisé pour cette page. Autorise-le depuis le menu Autorisations de l'artifact."; }
+        else if (!state.events){ state.agendaError = "Google Agenda ne répond pas pour l'instant."; }
+      }
+      renderAgenda();
+    }, {cache:{staleTime:300000, gcTime:3600000}, refetchInterval:600000});
+  });
+}
+
+showView(); renderAll(); startDb(); startAgenda();
+})();
+</script>
