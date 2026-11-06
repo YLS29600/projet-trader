@@ -456,6 +456,8 @@ def _parser():
 
 
 def _fetch_and_read(doc_id, year, pdf_dir, filed=None):
+    if not re.fullmatch(r"\d{1,12}", str(doc_id or "")):
+        raise PtrError("invalid doc id %r: digits only" % (doc_id,))
     os.makedirs(pdf_dir, exist_ok=True)
     path = os.path.join(pdf_dir, "%s.pdf" % doc_id)
     if not os.path.isfile(path):

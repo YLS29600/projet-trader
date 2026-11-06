@@ -1,2 +1,4 @@
-trader/state/
 __pycache__/
+# Données personnelles du portefeuille : jamais dans git
+trader/*
+!trader/config.json
